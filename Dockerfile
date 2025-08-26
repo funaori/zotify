@@ -1,6 +1,6 @@
 FROM python:3.10-alpine AS base
 
-RUN apk --update add ffmpeg git
+RUN apk --update add ffmpeg git curl
 
 FROM base AS builder
 
