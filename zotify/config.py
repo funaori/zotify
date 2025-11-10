@@ -582,17 +582,17 @@ class Zotify:
     def login(cls, args):
         """ Authenticates and saves credentials to a file """
         
-        creds = cls.CONFIG.get_credentials_location()
-        if creds and Path(creds).exists():
-            cls.SESSION = Session.Builder().stored_file(creds).create()
-            return
-        
         session_builder = Session.Builder() # stored_credentials_file == True by default
-        if creds:
+        session_builder.conf.store_credentials = False
+        
+        if Zotify.CONFIG.get_save_credentials():
+            creds = cls.CONFIG.get_credentials_location()
             session_builder.conf.stored_credentials_file = str(creds)
-        else:
-            session_builder.conf.store_credentials = False
-            session_builder.conf.stored_credentials_file = ""
+            if creds and Path(creds).exists():
+                cls.SESSION = Session.Builder().stored_file(creds).create()
+                return
+            else:
+                session_builder.conf.store_credentials = True
         
         if args.username not in {None, ""} and args.token not in {None, ""}:
             try:
@@ -689,11 +689,17 @@ class Zotify:
     def invoke_url_nextable(cls, url: str, response_key: str = ITEMS, limit: int = 50, stripper: str | None = None, offset: int = 0) -> list[dict]:
         resp = cls.invoke_url_with_params(url, limit=limit, offset=offset)
         if stripper is not None:
-            resp = resp[stripper]
+            resp = resp.get(stripper, resp)
+        if response_key not in resp:
+            Printer.hashtaged(PrintChannel.WARNING, f'Key "{response_key}" not found in API response: {resp}')
+            return []
         items: list = resp[response_key]
-        
-        while resp['next'] is not None:
-            (raw, resp) = Zotify.invoke_url(resp['next'])
+    
+        while resp.get('next') is not None:
+            _, resp = Zotify.invoke_url(resp['next'])
+            if response_key not in resp:
+                Printer.hashtaged(PrintChannel.WARNING, f'Key "{response_key}" not found in paginated API response: {resp}')
+                break
             items.extend(resp[response_key])
         return items
     
